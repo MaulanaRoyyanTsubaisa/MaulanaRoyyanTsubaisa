@@ -1,12 +1,12 @@
 {
-  "version": "1.8.0",
-  "note": "Incident Escalation: track outage duration, escalate persistent app/public failures at 15m and 60m, and include downtime in recovery messages",
+  "version": "2.0.0",
+  "note": "Web Control Center bridge: real-time host status, app controls, backups, deployments, GitHub repo state, Telegram messaging, package checks, Remote Ops controls, and guarded web command queue",
   "restart_gateway": false,
   "files": [
     {
       "source": "payloads/hermes-incident-monitor.py",
       "destination": "/usr/local/sbin/hermes-incident-monitor",
-      "git_blob_sha": "d92725771c0e45f778a0af68f80429b87cf87554"
+      "git_blob_sha": "ace48c0b98b44db7b7bf8c6019f70e4d50052ec4"
     }
   ]
 }
