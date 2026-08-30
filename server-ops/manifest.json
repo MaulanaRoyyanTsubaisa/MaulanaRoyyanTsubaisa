@@ -1,6 +1,6 @@
 {
-  "version": "1.2.3",
-  "note": "Repo detection ownership fix: handle Git 'dubious ownership' safely for Portfolio, OpsPilot, and BantuAI checkouts",
+  "version": "1.3.0",
+  "note": "Auto Alerting: proactive Telegram alerts for app outages, core service failures, RAM/disk/load pressure, backup verification problems, and deploy/rollback failures",
   "restart_gateway": false,
   "files": [
     {
@@ -16,7 +16,12 @@
     {
       "source": "payloads/hermes-dashboard.py",
       "destination": "/usr/local/sbin/hermes-dashboard",
-      "git_blob_sha": "954cf2f7c79c0ba4da26cbbd2586a61e96843935"
+      "git_blob_sha": "2c4a164070dbbbb1c078e2e3b1c412bf29935c63"
+    },
+    {
+      "source": "payloads/hermes-incident-monitor.py",
+      "destination": "/usr/local/sbin/hermes-incident-monitor",
+      "git_blob_sha": "ca070da198ae06e9c7fa7654c78d45e302f3d2b2"
     }
   ]
 }
