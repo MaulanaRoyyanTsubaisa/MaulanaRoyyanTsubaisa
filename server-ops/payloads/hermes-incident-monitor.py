@@ -35,18 +35,14 @@ PUBLIC_RETRY_DELAY = 3
 SSL_ALERT_DAYS = 14
 SSL_RECOVER_DAYS = 21
 
-PUBLIC_URLS = {
-    "portfolio": "https://maulanaroyyantsubaisa.my.id",
-    "opspilot": "https://opspilot.maulanaroyyantsubaisa.my.id",
-    "bantuai": "https://bantuai.maulanaroyyantsubaisa.my.id",
-    "niagabot": "https://niagabot.maulanaroyyantsubaisa.my.id",
-    "sajiin": "https://sajiin.maulanaroyyantsubaisa.my.id",
-    "kontenin": "https://kontenin.maulanaroyyantsubaisa.my.id",
-    "lamarin": "https://lamarin.maulanaroyyantsubaisa.my.id",
-    "rumahin": "https://rumahin.maulanaroyyantsubaisa.my.id",
-    "tagihin": "https://tagihin.maulanaroyyantsubaisa.my.id",
-    "janjiin": "https://janjiin.maulanaroyyantsubaisa.my.id",
-}
+BASE_DOMAIN = "maulanaroyyantsubaisa.my.id"
+ROOT_DOMAIN_APP = "portfolio"
+BOOT_ID_FILE = Path("/proc/sys/kernel/random/boot_id")
+
+def public_url_for(app):
+    if app == ROOT_DOMAIN_APP:
+        return f"https://{BASE_DOMAIN}"
+    return f"https://{app}.{BASE_DOMAIN}"
 
 def run(args, timeout=60):
     try:
@@ -239,14 +235,13 @@ def check_public_fleet(state, apps, alert_lines, recover_lines):
         return
 
     public_state = state.setdefault("public", {})
+    known_before = set(public_state)
     newly_failed = []
     newly_recovered = []
     failing_now = []
 
     for app in apps:
-        url = PUBLIC_URLS.get(app)
-        if not url:
-            continue
+        url = public_url_for(app)
 
         prev = public_state.get(app, {})
         was_active = bool(prev.get("active"))
@@ -283,8 +278,9 @@ def check_public_fleet(state, apps, alert_lines, recover_lines):
             newly_recovered.append(app)
 
     if newly_failed:
-        if len(failing_now) >= max(3, len(PUBLIC_URLS) // 2):
-            msg = f"🌐 Public routing problem: {len(failing_now)}/{len(PUBLIC_URLS)} endpoints failing"
+        monitored_total = max(1, len(apps))
+        if len(failing_now) >= max(3, monitored_total // 2):
+            msg = f"🌐 Public routing problem: {len(failing_now)}/{monitored_total} endpoints failing"
             alert_lines.append(msg)
             add_history(state, "alert", msg)
         else:
@@ -297,6 +293,15 @@ def check_public_fleet(state, apps, alert_lines, recover_lines):
         msg = f"✅ Public endpoint recovered: {app}"
         recover_lines.append(msg)
         add_history(state, "recovery", msg)
+
+    # Remove public-monitor entries for apps no longer registered.
+    for old_app in list(public_state):
+        if old_app not in set(apps):
+            public_state.pop(old_app, None)
+
+    # Record new apps entering dynamic public monitoring.
+    for new_app in sorted(set(apps) - known_before):
+        add_history(state, "info", f"🆕 Public monitoring enabled: {new_app} → {public_url_for(new_app)}")
 
     state["last_public_check"] = now
 
@@ -329,6 +334,17 @@ def set_transition(state, bucket, key, active, detail, alert_lines, recover_line
 def main():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     state = load_json(STATE_FILE, {})
+
+    # Detect host reboot using Linux boot_id. This sends at most one informational
+    # Telegram message after a real reboot and is silent on normal monitor runs.
+    try:
+        boot_id = BOOT_ID_FILE.read_text().strip()
+    except Exception:
+        boot_id = ""
+    previous_boot_id = state.get("boot_id")
+    boot_changed = bool(previous_boot_id and boot_id and previous_boot_id != boot_id)
+    if boot_id:
+        state["boot_id"] = boot_id
     app_state = state.setdefault("apps", {})
     resource_state = state.setdefault("resources", {})
     service_state = state.setdefault("services", {})
@@ -337,6 +353,11 @@ def main():
     alert_lines = []
     recover_lines = []
     info_lines = []
+
+    if boot_changed:
+        msg = "🔄 Home server reboot detected — monitoring resumed"
+        info_lines.append(msg)
+        add_history(state, "info", msg)
 
     apps = registry_apps()
     deploying = active_deploy_apps(apps)
