@@ -150,6 +150,10 @@ def service_status(name):
     rc, out = run(["systemctl", "is-active", name])
     return out if out else ("active" if rc == 0 else "inactive")
 
+def timer_active(name):
+    rc, out = run(["systemctl", "is-active", name])
+    return rc == 0 and out.strip() == "active"
+
 def mem_percent():
     vals = {}
     try:
@@ -314,6 +318,7 @@ def cmd_status():
     print("🟢 System Healthy" if overall else "🟠 Attention Needed")
     print(f"⏱️ Uptime: {uptime_text()}")
     print(f"🧩 Remote Ops: v{ops_version()}")
+    print(("🔔 Auto Alerting: active" if timer_active("hermes-incident-monitor.timer") else "🔕 Auto Alerting: inactive"))
     print()
     print("📦 Apps")
     print(f"✅ {len(healthy)}/{len(aa)} Online")
@@ -425,6 +430,8 @@ def cmd_incidents():
     alerts = resource_alerts()
     print("🚨 INCIDENT & RESOURCE STATUS")
     print("━━━━━━━━━━━━━━━━━━")
+    print(("🔔 Auto Alerting: active" if timer_active("hermes-incident-monitor.timer") else "🔕 Auto Alerting: inactive"))
+    print()
 
     if not active and not alerts:
         print("✅ No active incidents")
