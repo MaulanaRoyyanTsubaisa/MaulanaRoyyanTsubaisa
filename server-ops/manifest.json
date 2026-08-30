@@ -1,18 +1,8 @@
 {
-  "version": "1.4.0",
-  "note": "Smart Recovery: deployment-aware alert suppression, 30-minute restart cooldown, auto-recovery notices, and recent alert history in /incidents",
+  "version": "1.4.1",
+  "note": "Hot-reload fix: apply only Smart Recovery payloads so Hermes skill files are not rewritten during ops updates",
   "restart_gateway": false,
   "files": [
-    {
-      "source": "payloads/hermes-telegram-ops.py",
-      "destination": "/usr/local/sbin/hermes-telegram-ops",
-      "git_blob_sha": "1ac303bfd7aeb55983fc7e3a9cc07af7ace1fdb7"
-    },
-    {
-      "source": "payloads/telegram-ops-control.SKILL.md",
-      "destination": "/home/hermes/.hermes/skills/devops/telegram-ops-control/SKILL.md",
-      "git_blob_sha": "1becbeffd0920e93d39ef943c5c227cd9f6ad0a6"
-    },
     {
       "source": "payloads/hermes-dashboard.py",
       "destination": "/usr/local/sbin/hermes-dashboard",
