@@ -4,8 +4,11 @@ import json
 import os
 import subprocess
 import time
+import socket
+import ssl
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 OPS = "/usr/local/sbin/hermes-ops"
 SEND = Path("/usr/local/sbin/hermes-telegram-send")
@@ -26,6 +29,24 @@ HEALTH_DELAY = 4
 BACKUP_STALE_HOURS = 30
 RESTART_COOLDOWN = 1800
 HISTORY_LIMIT = 30
+PUBLIC_CHECK_INTERVAL = 600
+PUBLIC_RETRIES = 3
+PUBLIC_RETRY_DELAY = 3
+SSL_ALERT_DAYS = 14
+SSL_RECOVER_DAYS = 21
+
+PUBLIC_URLS = {
+    "portfolio": "https://maulanaroyyantsubaisa.my.id",
+    "opspilot": "https://opspilot.maulanaroyyantsubaisa.my.id",
+    "bantuai": "https://bantuai.maulanaroyyantsubaisa.my.id",
+    "niagabot": "https://niagabot.maulanaroyyantsubaisa.my.id",
+    "sajiin": "https://sajiin.maulanaroyyantsubaisa.my.id",
+    "kontenin": "https://kontenin.maulanaroyyantsubaisa.my.id",
+    "lamarin": "https://lamarin.maulanaroyyantsubaisa.my.id",
+    "rumahin": "https://rumahin.maulanaroyyantsubaisa.my.id",
+    "tagihin": "https://tagihin.maulanaroyyantsubaisa.my.id",
+    "janjiin": "https://janjiin.maulanaroyyantsubaisa.my.id",
+}
 
 def run(args, timeout=60):
     try:
@@ -173,6 +194,111 @@ def backup_problem():
             pass
 
     return bool(failed or stale), failed, stale
+
+def public_http(url):
+    last_code = "000"
+    last_detail = ""
+    for i in range(PUBLIC_RETRIES):
+        rc, out = run([
+            "curl", "-L", "--silent", "--show-error",
+            "--output", "/dev/null",
+            "--write-out", "%{http_code}",
+            "--connect-timeout", "5",
+            "--max-time", "12",
+            "--user-agent", "HermesHomeServerMonitor/1.5",
+            url,
+        ], timeout=20)
+        code = (out or "").strip()[-3:]
+        if code.isdigit():
+            last_code = code
+        last_detail = out
+        if rc == 0 and code.isdigit() and 200 <= int(code) < 400:
+            return True, code
+        if i < PUBLIC_RETRIES - 1:
+            time.sleep(PUBLIC_RETRY_DELAY)
+    return False, last_code if last_code != "000" else (last_detail[-120:] if last_detail else "unreachable")
+
+def tls_days_remaining(url):
+    try:
+        host = urlparse(url).hostname
+        if not host:
+            return None
+        ctx = ssl.create_default_context()
+        with socket.create_connection((host, 443), timeout=8) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
+                cert = ssock.getpeercert()
+        expiry = ssl.cert_time_to_seconds(cert["notAfter"])
+        return int((expiry - time.time()) // 86400)
+    except Exception:
+        return None
+
+def check_public_fleet(state, apps, alert_lines, recover_lines):
+    now = int(time.time())
+    last = int(state.get("last_public_check", 0) or 0)
+    if now - last < PUBLIC_CHECK_INTERVAL:
+        return
+
+    public_state = state.setdefault("public", {})
+    newly_failed = []
+    newly_recovered = []
+    failing_now = []
+
+    for app in apps:
+        url = PUBLIC_URLS.get(app)
+        if not url:
+            continue
+
+        prev = public_state.get(app, {})
+        was_active = bool(prev.get("active"))
+
+        http_ok, http_detail = public_http(url)
+        tls_days = tls_days_remaining(url) if http_ok else None
+
+        ssl_limit = SSL_RECOVER_DAYS if was_active else SSL_ALERT_DAYS
+        ssl_problem = tls_days is not None and tls_days <= ssl_limit
+        active = (not http_ok) or ssl_problem
+
+        if not http_ok:
+            detail = f"HTTP {http_detail}"
+        elif ssl_problem:
+            detail = f"SSL expires in {tls_days}d"
+        elif tls_days is None:
+            detail = f"HTTP {http_detail}; TLS metadata unavailable"
+        else:
+            detail = f"HTTP {http_detail}; SSL {tls_days}d"
+
+        public_state[app] = {
+            "active": active,
+            "detail": detail,
+            "url": url,
+            "updated_at": now,
+        }
+
+        if active:
+            failing_now.append(app)
+
+        if active and not was_active:
+            newly_failed.append((app, detail))
+        elif not active and was_active:
+            newly_recovered.append(app)
+
+    if newly_failed:
+        if len(failing_now) >= max(3, len(PUBLIC_URLS) // 2):
+            msg = f"🌐 Public routing problem: {len(failing_now)}/{len(PUBLIC_URLS)} endpoints failing"
+            alert_lines.append(msg)
+            add_history(state, "alert", msg)
+        else:
+            for app, detail in newly_failed:
+                msg = f"🌐 Public endpoint problem: {app} — {detail}"
+                alert_lines.append(msg)
+                add_history(state, "alert", msg)
+
+    for app in newly_recovered:
+        msg = f"✅ Public endpoint recovered: {app}"
+        recover_lines.append(msg)
+        add_history(state, "recovery", msg)
+
+    state["last_public_check"] = now
 
 def recent_deploy_failure():
     rc, out = run(["journalctl", "--since", "20 minutes ago", "--no-pager"], timeout=30)
@@ -330,6 +456,9 @@ def main():
             f"⚠️ Load high: {l1:.2f} on {cpus} CPU",
             f"✅ Load recovered: {l1:.2f} on {cpus} CPU",
         )
+
+    # Public URL + TLS/SSL checks run every 10 minutes.
+    check_public_fleet(state, apps, alert_lines, recover_lines)
 
     # Backup verification state.
     b_active, failed, stale = backup_problem()
