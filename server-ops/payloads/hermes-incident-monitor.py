@@ -390,6 +390,10 @@ def web_collect_status():
         and (disk.get("percent") is None or disk["percent"] < DISK_ALERT)
     )
 
+    web_activity = load_json(WEB_ACTIVITY, [])
+    if not isinstance(web_activity, list):
+        web_activity = []
+
     return {
         "schema": 1,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
@@ -427,6 +431,7 @@ def web_collect_status():
         "bridge": {
             "online": True,
             "queueDepth": len(list(WEB_COMMANDS.glob("*.json"))) if WEB_COMMANDS.exists() else 0,
+            "activity": web_activity[-50:],
         },
     }
 
