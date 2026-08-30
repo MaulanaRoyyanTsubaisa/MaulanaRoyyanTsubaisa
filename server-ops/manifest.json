@@ -1,0 +1,17 @@
+{
+  "version": "1.0.0",
+  "note": "Telegram Ops Control + guarded remote server updates",
+  "restart_gateway": true,
+  "files": [
+    {
+      "source": "payloads/hermes-telegram-ops.py",
+      "destination": "/usr/local/sbin/hermes-telegram-ops",
+      "git_blob_sha": "219c846de90cbf641d9d0854ab7ec0a993733810"
+    },
+    {
+      "source": "payloads/telegram-ops-control.SKILL.md",
+      "destination": "/home/hermes/.hermes/skills/devops/telegram-ops-control/SKILL.md",
+      "git_blob_sha": "4e92f95f87c49d8200babce6d8e97c840ad9a87f"
+    }
+  ]
+}
