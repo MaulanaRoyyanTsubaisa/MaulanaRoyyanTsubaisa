@@ -1,6 +1,6 @@
 {
-  "version": "1.1.0",
-  "note": "Telegram Ops upgrade: /health all, /backupnow all, safer redacted logs, stronger new-repo detection",
+  "version": "1.2.0",
+  "note": "Fleet Control: richer /server, /apps, /backup, /deployments, /incidents with uptime, repo readability, resource alerts, and recent deploy history",
   "restart_gateway": false,
   "files": [
     {
@@ -12,6 +12,11 @@
       "source": "payloads/telegram-ops-control.SKILL.md",
       "destination": "/home/hermes/.hermes/skills/devops/telegram-ops-control/SKILL.md",
       "git_blob_sha": "1becbeffd0920e93d39ef943c5c227cd9f6ad0a6"
+    },
+    {
+      "source": "payloads/hermes-dashboard.py",
+      "destination": "/usr/local/sbin/hermes-dashboard",
+      "git_blob_sha": "beb2894b93bafff19cf23b6a7be97fae256ed9a6"
     }
   ]
 }
