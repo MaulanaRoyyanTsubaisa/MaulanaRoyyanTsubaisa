@@ -10,7 +10,7 @@ BASE="https://raw.githubusercontent.com/MaulanaRoyyanTsubaisa/MaulanaRoyyanTsuba
 CFG="/home/hermes/.hermes/config.yaml"
 PY="/home/hermes/.hermes/hermes-agent/venv/bin/python"
 TS="$(date +%Y%m%d-%H%M%S)"
-SYNC_BLOB_SHA="7715d0606ca02a7c4852c2692bba6b7bebb4c143"
+SYNC_BLOB_SHA="0d8da51b9114f9930819994148c0d76ab2b7cc6f"
 
 echo "============================================================"
 echo "HERMES REMOTE OPS BOOTSTRAP"
