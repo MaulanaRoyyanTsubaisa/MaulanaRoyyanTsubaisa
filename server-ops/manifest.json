@@ -1,17 +1,6 @@
 {
-  "version": "1.4.1",
-  "note": "Hot-reload fix: apply only Smart Recovery payloads so Hermes skill files are not rewritten during ops updates",
+  "version": "1.4.2",
+  "note": "No-op gateway diagnostic: applies zero payload files and requests no Hermes gateway restart",
   "restart_gateway": false,
-  "files": [
-    {
-      "source": "payloads/hermes-dashboard.py",
-      "destination": "/usr/local/sbin/hermes-dashboard",
-      "git_blob_sha": "0d00f0dbc612ad7a674d81ae6774061130ae8051"
-    },
-    {
-      "source": "payloads/hermes-incident-monitor.py",
-      "destination": "/usr/local/sbin/hermes-incident-monitor",
-      "git_blob_sha": "7c4851182fab29bce884b1a617bbf14c835266af"
-    }
-  ]
+  "files": []
 }
