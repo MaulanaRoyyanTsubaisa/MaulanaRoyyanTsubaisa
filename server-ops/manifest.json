@@ -1,12 +1,12 @@
 {
-  "version": "1.4.4",
-  "note": "Single-file diagnostic: rewrite only hermes-incident-monitor to verify whether Smart Recovery updates can be applied without interrupting Hermes Gateway",
+  "version": "1.5.0",
+  "note": "Public URL + SSL Watch: proactive Telegram alerts for public endpoint failures and TLS certificates nearing expiry",
   "restart_gateway": false,
   "files": [
     {
       "source": "payloads/hermes-incident-monitor.py",
       "destination": "/usr/local/sbin/hermes-incident-monitor",
-      "git_blob_sha": "7c4851182fab29bce884b1a617bbf14c835266af"
+      "git_blob_sha": "a20e653f9ec70dea1e7ca16567db246b83bd21a4"
     }
   ]
 }
