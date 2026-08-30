@@ -1,6 +1,6 @@
 {
-  "version": "1.3.0",
-  "note": "Auto Alerting: proactive Telegram alerts for app outages, core service failures, RAM/disk/load pressure, backup verification problems, and deploy/rollback failures",
+  "version": "1.4.0",
+  "note": "Smart Recovery: deployment-aware alert suppression, 30-minute restart cooldown, auto-recovery notices, and recent alert history in /incidents",
   "restart_gateway": false,
   "files": [
     {
@@ -16,12 +16,12 @@
     {
       "source": "payloads/hermes-dashboard.py",
       "destination": "/usr/local/sbin/hermes-dashboard",
-      "git_blob_sha": "2c4a164070dbbbb1c078e2e3b1c412bf29935c63"
+      "git_blob_sha": "0d00f0dbc612ad7a674d81ae6774061130ae8051"
     },
     {
       "source": "payloads/hermes-incident-monitor.py",
       "destination": "/usr/local/sbin/hermes-incident-monitor",
-      "git_blob_sha": "ca070da198ae06e9c7fa7654c78d45e302f3d2b2"
+      "git_blob_sha": "7c4851182fab29bce884b1a617bbf14c835266af"
     }
   ]
 }
