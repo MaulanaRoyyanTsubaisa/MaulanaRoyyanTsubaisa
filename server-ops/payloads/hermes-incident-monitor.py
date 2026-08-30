@@ -37,6 +37,8 @@ SSL_RECOVER_DAYS = 21
 PUBLIC_SLOW_SECONDS = 3.0
 PUBLIC_SLOW_RECOVER_SECONDS = 2.0
 PUBLIC_SLOW_CONSECUTIVE = 2
+INCIDENT_ESCALATE_1 = 900
+INCIDENT_ESCALATE_2 = 3600
 
 BASE_DOMAIN = "maulanaroyyantsubaisa.my.id"
 ROOT_DOMAIN_APP = "portfolio"
@@ -98,6 +100,19 @@ def add_history(state, kind, message):
         "message": message,
     })
     del history[:-HISTORY_LIMIT]
+
+def duration_text(seconds):
+    seconds = max(0, int(seconds or 0))
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes}m"
+    hours, minutes = divmod(minutes, 60)
+    if hours < 24:
+        return f"{hours}h {minutes}m"
+    days, hours = divmod(hours, 24)
+    return f"{days}d {hours}h"
 
 def registry_apps():
     data = load_json(REG, {"apps": {}})
@@ -303,6 +318,37 @@ def check_public_fleet(state, apps, alert_lines, recover_lines):
         else:
             detail = f"HTTP {http_detail}; {latency_text}; SSL {tls_days}d"
 
+        outage_started_at = int(prev.get("outage_started_at", 0) or 0)
+        outage_escalation_level = int(prev.get("outage_escalation_level", 0) or 0)
+        was_http_down = bool(prev.get("http_down"))
+
+        if not http_ok:
+            if not was_http_down:
+                outage_started_at = now
+                outage_escalation_level = 0
+            elif not outage_started_at:
+                outage_started_at = now
+
+            outage_for = now - outage_started_at
+            if was_http_down and outage_for >= INCIDENT_ESCALATE_2 and outage_escalation_level < 2:
+                outage_escalation_level = 2
+                msg = f"🔴 CRITICAL: public endpoint still down: {app} — {duration_text(outage_for)}"
+                alert_lines.append(msg)
+                add_history(state, "alert", msg)
+            elif was_http_down and outage_for >= INCIDENT_ESCALATE_1 and outage_escalation_level < 1:
+                outage_escalation_level = 1
+                msg = f"🟠 Public endpoint still down: {app} — {duration_text(outage_for)}"
+                alert_lines.append(msg)
+                add_history(state, "alert", msg)
+        elif was_http_down:
+            outage_for = now - outage_started_at if outage_started_at else 0
+            suffix = f" after {duration_text(outage_for)}" if outage_for else ""
+            msg = f"✅ Public endpoint recovered: {app}{suffix}"
+            recover_lines.append(msg)
+            add_history(state, "recovery", msg)
+            outage_started_at = 0
+            outage_escalation_level = 0
+
         public_state[app] = {
             "active": active,
             "detail": detail,
@@ -310,6 +356,9 @@ def check_public_fleet(state, apps, alert_lines, recover_lines):
             "latency_seconds": latency,
             "slow_count": slow_count,
             "slow_active": slow_active,
+            "http_down": not http_ok,
+            "outage_started_at": outage_started_at if not http_ok else 0,
+            "outage_escalation_level": outage_escalation_level if not http_ok else 0,
             "updated_at": now,
         }
 
@@ -318,7 +367,7 @@ def check_public_fleet(state, apps, alert_lines, recover_lines):
 
         if active and not was_active:
             newly_failed.append((app, detail))
-        elif not active and was_active:
+        elif not active and was_active and not was_http_down:
             newly_recovered.append(app)
 
     if newly_failed:
@@ -446,17 +495,39 @@ def main():
                     add_history(state, "info", msg)
 
         active = not ok
+        started_at = int(prev.get("started_at", 0) or 0)
+        escalation_level = int(prev.get("escalation_level", 0) or 0)
 
         if active and not was_active:
+            started_at = now
+            escalation_level = 0
             msg = f"❌ App down: {app}"
             if restart_attempted:
                 msg += " (safe restart attempted)"
             alert_lines.append(msg)
             add_history(state, "alert", msg)
+        elif active and was_active:
+            if not started_at:
+                started_at = now
+            down_for = now - started_at
+            if down_for >= INCIDENT_ESCALATE_2 and escalation_level < 2:
+                escalation_level = 2
+                msg = f"🔴 CRITICAL: app still down: {app} — {duration_text(down_for)}"
+                alert_lines.append(msg)
+                add_history(state, "alert", msg)
+            elif down_for >= INCIDENT_ESCALATE_1 and escalation_level < 1:
+                escalation_level = 1
+                msg = f"🟠 App still down: {app} — {duration_text(down_for)}"
+                alert_lines.append(msg)
+                add_history(state, "alert", msg)
         elif not active and was_active:
-            msg = f"✅ App recovered: {app}"
+            down_for = now - started_at if started_at else 0
+            suffix = f" after {duration_text(down_for)}" if down_for else ""
+            msg = f"✅ App recovered: {app}{suffix}"
             recover_lines.append(msg)
             add_history(state, "recovery", msg)
+            started_at = 0
+            escalation_level = 0
 
         app_state[app] = {
             "active": active,
@@ -464,6 +535,8 @@ def main():
             "restart_attempted": restart_attempted,
             "last_restart_attempt": last_restart,
             "deploy_suppressed": suppressed_by_deploy,
+            "started_at": started_at if active else 0,
+            "escalation_level": escalation_level if active else 0,
             "updated_at": now,
         }
 
