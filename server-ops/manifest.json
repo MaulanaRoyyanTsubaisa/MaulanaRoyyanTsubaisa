@@ -1,6 +1,6 @@
 {
-  "version": "1.2.2",
-  "note": "Repo detection fix for Portfolio, OpsPilot, and BantuAI source checkouts in Hermes workspace",
+  "version": "1.2.3",
+  "note": "Repo detection ownership fix: handle Git 'dubious ownership' safely for Portfolio, OpsPilot, and BantuAI checkouts",
   "restart_gateway": false,
   "files": [
     {
@@ -16,7 +16,7 @@
     {
       "source": "payloads/hermes-dashboard.py",
       "destination": "/usr/local/sbin/hermes-dashboard",
-      "git_blob_sha": "be3b54063851dcd7505e999cdc6031b562b94520"
+      "git_blob_sha": "954cf2f7c79c0ba4da26cbbd2586a61e96843935"
     }
   ]
 }
