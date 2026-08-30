@@ -1,6 +1,12 @@
 {
-  "version": "1.4.2",
-  "note": "No-op gateway diagnostic: applies zero payload files and requests no Hermes gateway restart",
+  "version": "1.4.3",
+  "note": "Single-file diagnostic: rewrite only hermes-dashboard to isolate what triggers Telegram gateway interruption",
   "restart_gateway": false,
-  "files": []
+  "files": [
+    {
+      "source": "payloads/hermes-dashboard.py",
+      "destination": "/usr/local/sbin/hermes-dashboard",
+      "git_blob_sha": "0d00f0dbc612ad7a674d81ae6774061130ae8051"
+    }
+  ]
 }
