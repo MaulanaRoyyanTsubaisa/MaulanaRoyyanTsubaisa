@@ -98,14 +98,16 @@ def repo_candidates(app):
     ])
 
     # Original applications whose checkout folder differs from the app alias.
-    special = {
-        "portfolio": Path("/srv/apps/maulana-royyan-tsubaisa"),
-        "opspilot": Path("/srv/apps/opspilot-dashboard"),
-        "bantuai": Path("/srv/apps/bantuai-chatbot"),
-        "niagabot": Path("/srv/apps/niagabot"),
+    special_names = {
+        "portfolio": "maulana-royyan-tsubaisa",
+        "opspilot": "opspilot-dashboard",
+        "bantuai": "bantuai-chatbot",
+        "niagabot": "niagabot",
     }
-    if app in special:
-        out.append(special[app])
+    if app in special_names:
+        name = special_names[app]
+        out.append(Path("/srv/apps") / name)
+        out.append(Path("/srv/hermes-workspace/repos") / name)
 
     # Preserve order while removing duplicates.
     seen = set()
