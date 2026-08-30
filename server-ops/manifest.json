@@ -1,12 +1,12 @@
 {
-  "version": "1.4.3",
-  "note": "Single-file diagnostic: rewrite only hermes-dashboard to isolate what triggers Telegram gateway interruption",
+  "version": "1.4.4",
+  "note": "Single-file diagnostic: rewrite only hermes-incident-monitor to verify whether Smart Recovery updates can be applied without interrupting Hermes Gateway",
   "restart_gateway": false,
   "files": [
     {
-      "source": "payloads/hermes-dashboard.py",
-      "destination": "/usr/local/sbin/hermes-dashboard",
-      "git_blob_sha": "0d00f0dbc612ad7a674d81ae6774061130ae8051"
+      "source": "payloads/hermes-incident-monitor.py",
+      "destination": "/usr/local/sbin/hermes-incident-monitor",
+      "git_blob_sha": "7c4851182fab29bce884b1a617bbf14c835266af"
     }
   ]
 }
