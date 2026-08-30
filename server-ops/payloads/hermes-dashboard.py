@@ -125,12 +125,16 @@ def repo_ok(app):
     for path in repo_candidates(app):
         if not path.exists():
             continue
-        rc, inside = run(["git", "-C", str(path), "rev-parse", "--is-inside-work-tree"], timeout=10)
+        git_base = ["git", "-c", f"safe.directory={path}", "-C", str(path)]
+        rc, inside = run(git_base + ["rev-parse", "--is-inside-work-tree"], timeout=10)
         if rc != 0 or inside.strip().lower() != "true":
+            # Some original app checkouts are owned by a different service user.
+            # A plain root git invocation can reject them as "dubious ownership".
+            # safe.directory above is scoped to this single read-only command only.
             continue
 
-        _, branch = run(["git", "-C", str(path), "branch", "--show-current"], timeout=10)
-        _, sha = run(["git", "-C", str(path), "rev-parse", "--short", "HEAD"], timeout=10)
+        _, branch = run(git_base + ["branch", "--show-current"], timeout=10)
+        _, sha = run(git_base + ["rev-parse", "--short", "HEAD"], timeout=10)
         detail = str(path)
         if branch or sha:
             detail += " | " + "@".join(x for x in (clean(branch, 30), clean(sha, 16)) if x)
