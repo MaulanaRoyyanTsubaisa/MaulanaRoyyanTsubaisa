@@ -1,7 +1,7 @@
 {
-  "version": "1.0.1",
-  "note": "Remote update proof: richer Telegram ops help + dashboard references",
-  "restart_gateway": true,
+  "version": "1.0.2",
+  "note": "Smoother remote apply: payload-only updates no longer restart Hermes Gateway",
+  "restart_gateway": false,
   "files": [
     {
       "source": "payloads/hermes-telegram-ops.py",
