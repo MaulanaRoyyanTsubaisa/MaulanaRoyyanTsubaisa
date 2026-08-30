@@ -1,6 +1,6 @@
 {
-  "version": "1.2.1",
-  "note": "Fleet repo detection fix: /apps now detects local Git checkouts across Hermes workspace and original app paths without false repo? warnings",
+  "version": "1.2.2",
+  "note": "Repo detection fix for Portfolio, OpsPilot, and BantuAI source checkouts in Hermes workspace",
   "restart_gateway": false,
   "files": [
     {
@@ -16,7 +16,7 @@
     {
       "source": "payloads/hermes-dashboard.py",
       "destination": "/usr/local/sbin/hermes-dashboard",
-      "git_blob_sha": "e49e1500ea3095f3cf96c6302ed6a122d3392ef0"
+      "git_blob_sha": "be3b54063851dcd7505e999cdc6031b562b94520"
     }
   ]
 }
