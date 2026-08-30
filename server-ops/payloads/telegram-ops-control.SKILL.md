@@ -1,4 +1,4 @@
-# Telegram Ops Control
+# Telegram Ops Control v1.0.1
 
 Use this skill only for the Telegram/server operation commands below.
 
@@ -37,3 +37,13 @@ Exact command mapping:
 - `help` -> `/usr/local/bin/hermes-telegram-ops-safe help`
 
 If an argument is missing, show only the usage for that command and do not call any privileged helper.
+
+
+Dashboard reference:
+- `/server` — ringkasan home server
+- `/apps` — status semua aplikasi
+- `/backup` — status backup verifier
+- `/deployments` — deployment queue/history
+- `/incidents` — incident monitor
+
+These dashboard commands are read-only.
