@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 REG = Path("/etc/hermes-ops/apps.json")
 BACKUP_STATE = Path("/var/lib/hermes-autopilot/backup-status.json")
 INCIDENT_STATE = Path("/var/lib/hermes-autopilot/incidents/state.json")
-OPS_SYNC_STATE = Path("/var/lib/hermes-ops-sync/state.json")
+OPS_SYNC_STATE = Path("/var/lib/hermes-ops-sync/state.json")\nALERT_STATE = Path("/var/lib/hermes-autopilot/alerting/state.json")
 TZ = ZoneInfo("Asia/Jakarta")
 
 RAM_WARN = 85
@@ -229,6 +229,35 @@ def incident_summary():
         except Exception:
             pass
     return sorted(active)
+
+def alert_state():
+    if ALERT_STATE.exists():
+        try:
+            d = json.loads(ALERT_STATE.read_text())
+            if isinstance(d, dict):
+                return d
+        except Exception:
+            pass
+    return {}
+
+def recent_alert_history(limit=8):
+    d = alert_state()
+    history = d.get("history", [])
+    if not isinstance(history, list):
+        return []
+    rows = []
+    for item in history[-limit:]:
+        if not isinstance(item, dict):
+            continue
+        ts = item.get("ts", "")
+        msg = clean(item.get("message", ""), 130)
+        try:
+            dt = datetime.fromisoformat(ts).astimezone(TZ)
+            ts = dt.strftime("%d %b %H:%M")
+        except Exception:
+            ts = "-"
+        rows.append((ts, item.get("kind", "info"), msg))
+    return rows
 
 def queue_status():
     rc, out = run(["systemctl", "list-units", "--all", "--no-pager", "hermes-deploy-*"])
@@ -453,8 +482,28 @@ def cmd_incidents():
     print(f"RAM: {ram if ram is not None else '?'}% (warn ≥{RAM_WARN}%)")
     print(f"Disk: {disk if disk is not None else '?'}% (warn ≥{DISK_WARN}%)")
     print(f"Load: {l1:.2f}/{cpus} CPU" if l1 is not None else "Load: ?")
+    d = alert_state()
+    deploying = d.get("deploying_apps", [])
+    cooldown = int(d.get("restart_cooldown_seconds", 1800) or 1800)
     print()
-    print("Incident monitor uses retry logic to reduce transient false alarms.")
+    print("🧠 Smart Recovery")
+    print("✅ Deployment-aware alert suppression")
+    print(f"✅ Auto-restart cooldown: {cooldown // 60} min")
+    if deploying:
+        print("⏳ Deploying now: " + ", ".join(deploying))
+    else:
+        print("✅ No apps currently deploying")
+
+    history = recent_alert_history(8)
+    if history:
+        print()
+        print("🕘 Recent alert history")
+        for ts, kind, msg in history:
+            icon = "🚨" if kind == "alert" else ("✅" if kind == "recovery" else "🛠️")
+            print(f"{icon} {ts} — {msg}")
+
+    print()
+    print("Incident monitor retries health checks before declaring failure.")
 
 def cmd_help():
     print("🤖 ROYYAN HOME SERVER COMMANDS")
@@ -464,7 +513,7 @@ def cmd_help():
     print("/apps — fleet health + repo readability")
     print("/backup — status backup + timers")
     print("/deployments — queue + recent deploy events")
-    print("/incidents — incidents + RAM/disk/load warnings")
+    print("/incidents — incidents + resources + smart recovery history")
     print()
     print("App operations:")
     print("/health <app> | /health all")
