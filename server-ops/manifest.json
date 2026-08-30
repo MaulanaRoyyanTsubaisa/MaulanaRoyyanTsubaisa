@@ -1,17 +1,17 @@
 {
-  "version": "1.0.2",
-  "note": "Smoother remote apply: payload-only updates no longer restart Hermes Gateway",
+  "version": "1.1.0",
+  "note": "Telegram Ops upgrade: /health all, /backupnow all, safer redacted logs, stronger new-repo detection",
   "restart_gateway": false,
   "files": [
     {
       "source": "payloads/hermes-telegram-ops.py",
       "destination": "/usr/local/sbin/hermes-telegram-ops",
-      "git_blob_sha": "947ddbc5cb92c3b5f2b8c75c1b7210751fbeda16"
+      "git_blob_sha": "1ac303bfd7aeb55983fc7e3a9cc07af7ace1fdb7"
     },
     {
       "source": "payloads/telegram-ops-control.SKILL.md",
       "destination": "/home/hermes/.hermes/skills/devops/telegram-ops-control/SKILL.md",
-      "git_blob_sha": "31987b69e9e319f1758a47d3edbb2cbed061826c"
+      "git_blob_sha": "1becbeffd0920e93d39ef943c5c227cd9f6ad0a6"
     }
   ]
 }
