@@ -128,7 +128,7 @@ def check(do_notify=False):
         )
         state["notified_sha"] = msha
         save_state(state)
-    return 2
+    return 0
 
 def apply():
     manifest, msha = get_manifest()
