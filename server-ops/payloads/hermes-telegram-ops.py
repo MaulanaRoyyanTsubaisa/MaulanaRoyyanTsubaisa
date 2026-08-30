@@ -209,12 +209,17 @@ def cancel():
     return 0
 
 def usage():
-    print("""🤖 TELEGRAM OPS CONTROL
+    print("""🤖 TELEGRAM OPS CONTROL v1.0.1
 
 Read-only / low-risk:
   /health <app>
   /logs <app>
   /backupnow <app>
+  /server
+  /apps
+  /backup
+  /deployments
+  /incidents
 
 Confirmation required:
   /restartapp <app>
@@ -228,6 +233,9 @@ Confirmation:
 Remote server updates:
   /opscheck
   /opsapply
+
+Tip:
+  Gunakan /server untuk ringkasan home server.
 """)
 
 def main():
