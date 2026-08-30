@@ -24,6 +24,8 @@ LOAD_FACTOR_RECOVER = 1.0
 HEALTH_RETRIES = 3
 HEALTH_DELAY = 4
 BACKUP_STALE_HOURS = 30
+RESTART_COOLDOWN = 1800
+HISTORY_LIMIT = 30
 
 def run(args, timeout=60):
     try:
@@ -68,6 +70,15 @@ def save_json(path, data):
     os.chmod(tmp, 0o600)
     os.replace(tmp, path)
 
+def add_history(state, kind, message):
+    history = state.setdefault("history", [])
+    history.append({
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "kind": kind,
+        "message": message,
+    })
+    del history[:-HISTORY_LIMIT]
+
 def registry_apps():
     data = load_json(REG, {"apps": {}})
     out = set()
@@ -75,6 +86,20 @@ def registry_apps():
         if isinstance(v, dict) and v.get("app"):
             out.add(v["app"])
     return sorted(out)
+
+def active_deploy_apps(apps):
+    rc, out = run(["systemctl", "list-units", "--all", "--no-pager", "hermes-deploy-*"], timeout=20)
+    if rc != 0:
+        return set()
+    active = set()
+    for line in out.splitlines():
+        if not any(word in line for word in (" running ", " activating ")):
+            continue
+        low = line.lower()
+        for app in apps:
+            if f"hermes-deploy-{app}" in low:
+                active.add(app)
+    return active
 
 def health(app):
     last = ""
@@ -160,13 +185,15 @@ def recent_deploy_failure():
             candidates.append(line.strip())
     return candidates[-1] if candidates else None
 
-def set_transition(bucket, key, active, detail, alert_lines, recover_lines, alert_text, recover_text):
+def set_transition(state, bucket, key, active, detail, alert_lines, recover_lines, alert_text, recover_text):
     prev = bucket.get(key, {})
     was_active = bool(prev.get("active"))
     if active and not was_active:
         alert_lines.append(alert_text)
+        add_history(state, "alert", alert_text)
     elif not active and was_active:
         recover_lines.append(recover_text)
+        add_history(state, "recovery", recover_text)
     bucket[key] = {
         "active": bool(active),
         "detail": detail,
@@ -183,33 +210,74 @@ def main():
 
     alert_lines = []
     recover_lines = []
+    info_lines = []
 
-    # Application health with conservative retries and one safe restart attempt.
-    for app in registry_apps():
-        ok, detail = health(app)
-        restarted = False
-        if not ok:
-            restarted = True
-            ok, detail = restart_and_health(app)
+    apps = registry_apps()
+    deploying = active_deploy_apps(apps)
+    now = int(time.time())
 
+    # Application health with retries, deploy-awareness and restart cooldown.
+    for app in apps:
         prev = app_state.get(app, {})
         was_active = bool(prev.get("active"))
+        last_restart = int(prev.get("last_restart_attempt", 0) or 0)
+
+        ok, detail = health(app)
+        restart_attempted = False
+        suppressed_by_deploy = False
+
+        if not ok and app in deploying:
+            # Planned deployments can temporarily fail health checks. Do not
+            # auto-restart or open a new incident while the deployment owns it.
+            suppressed_by_deploy = True
+            if not prev.get("deploy_suppressed"):
+                add_history(state, "info", f"⏸️ Health alert suppressed during deployment: {app}")
+            app_state[app] = {
+                **prev,
+                "active": was_active,
+                "detail": (detail or "")[-300:],
+                "deploy_suppressed": True,
+                "updated_at": now,
+            }
+            continue
+
+        if not ok:
+            can_restart = (not was_active) or (now - last_restart >= RESTART_COOLDOWN)
+            if can_restart:
+                restart_attempted = True
+                last_restart = now
+                ok_after, detail_after = restart_and_health(app)
+                ok = ok_after
+                detail = detail_after
+                if ok:
+                    msg = f"🛠️ Auto-recovered app after safe restart: {app}"
+                    info_lines.append(msg)
+                    add_history(state, "info", msg)
+
         active = not ok
 
         if active and not was_active:
-            alert_lines.append(f"❌ App down: {app} (safe restart attempted)")
+            msg = f"❌ App down: {app}"
+            if restart_attempted:
+                msg += " (safe restart attempted)"
+            alert_lines.append(msg)
+            add_history(state, "alert", msg)
         elif not active and was_active:
-            recover_lines.append(f"✅ App recovered: {app}")
+            msg = f"✅ App recovered: {app}"
+            recover_lines.append(msg)
+            add_history(state, "recovery", msg)
 
         app_state[app] = {
             "active": active,
             "detail": (detail or "")[-300:],
-            "restart_attempted": restarted,
-            "updated_at": int(time.time()),
+            "restart_attempted": restart_attempted,
+            "last_restart_attempt": last_restart,
+            "deploy_suppressed": suppressed_by_deploy,
+            "updated_at": now,
         }
 
     # Remove stale app entries that are no longer registered.
-    live_apps = set(registry_apps())
+    live_apps = set(apps)
     for old_app in list(app_state):
         if old_app not in live_apps:
             app_state.pop(old_app, None)
@@ -222,7 +290,7 @@ def main():
     ):
         active = not is_active(service)
         set_transition(
-            service_state, service, active, "inactive" if active else "active",
+            state, service_state, service, active, "inactive" if active else "active",
             alert_lines, recover_lines,
             f"❌ Core service down: {label}",
             f"✅ Core service recovered: {label}",
@@ -234,7 +302,7 @@ def main():
         was = bool(resource_state.get("ram", {}).get("active"))
         active = ram >= (RAM_RECOVER if was else RAM_ALERT)
         set_transition(
-            resource_state, "ram", active, f"{ram}%",
+            state, resource_state, "ram", active, f"{ram}%",
             alert_lines, recover_lines,
             f"⚠️ RAM high: {ram}% (threshold {RAM_ALERT}%)",
             f"✅ RAM recovered: {ram}%",
@@ -245,7 +313,7 @@ def main():
         was = bool(resource_state.get("disk", {}).get("active"))
         active = disk >= (DISK_RECOVER if was else DISK_ALERT)
         set_transition(
-            resource_state, "disk", active, f"{disk}%",
+            state, resource_state, "disk", active, f"{disk}%",
             alert_lines, recover_lines,
             f"⚠️ Disk high: {disk}% (threshold {DISK_ALERT}%)",
             f"✅ Disk recovered: {disk}%",
@@ -257,7 +325,7 @@ def main():
         threshold = cpus * (LOAD_FACTOR_RECOVER if was else LOAD_FACTOR_ALERT)
         active = l1 >= threshold
         set_transition(
-            resource_state, "load", active, f"{l1:.2f}/{cpus}",
+            state, resource_state, "load", active, f"{l1:.2f}/{cpus}",
             alert_lines, recover_lines,
             f"⚠️ Load high: {l1:.2f} on {cpus} CPU",
             f"✅ Load recovered: {l1:.2f} on {cpus} CPU",
@@ -271,7 +339,7 @@ def main():
     if stale:
         detail.append("stale")
     set_transition(
-        misc_state, "backup", b_active, "; ".join(detail) or "ok",
+        state, misc_state, "backup", b_active, "; ".join(detail) or "ok",
         alert_lines, recover_lines,
         ("❌ Backup verification problem: " + ("; ".join(detail) or "unknown")),
         "✅ Backup verification recovered",
@@ -282,11 +350,15 @@ def main():
     if failure:
         sig = hashlib.sha256(failure.encode()).hexdigest()
         if misc_state.get("last_deploy_failure_sig") != sig:
-            alert_lines.append("❌ New deployment/rollback failure detected")
+            msg = "❌ New deployment/rollback failure detected"
+            alert_lines.append(msg)
+            add_history(state, "alert", msg)
             misc_state["last_deploy_failure_sig"] = sig
             misc_state["last_deploy_failure"] = failure[-500:]
 
     state["last_run"] = datetime.now(timezone.utc).isoformat()
+    state["deploying_apps"] = sorted(deploying)
+    state["restart_cooldown_seconds"] = RESTART_COOLDOWN
     save_json(STATE_FILE, state)
 
     # Compatibility state consumed by /incidents dashboard.
@@ -311,6 +383,13 @@ def main():
             "✅ HOME SERVER RECOVERY\n\n"
             + "\n".join(recover_lines)
             + "\n\nSystem monitoring remains active."
+        )
+
+    if info_lines:
+        notify(
+            "🛠️ HOME SERVER AUTO-RECOVERY\n\n"
+            + "\n".join(info_lines)
+            + "\n\nNo manual action was required."
         )
 
 if __name__ == "__main__":
