@@ -1,6 +1,6 @@
 {
-  "version": "1.2.0",
-  "note": "Fleet Control: richer /server, /apps, /backup, /deployments, /incidents with uptime, repo readability, resource alerts, and recent deploy history",
+  "version": "1.2.1",
+  "note": "Fleet repo detection fix: /apps now detects local Git checkouts across Hermes workspace and original app paths without false repo? warnings",
   "restart_gateway": false,
   "files": [
     {
@@ -16,7 +16,7 @@
     {
       "source": "payloads/hermes-dashboard.py",
       "destination": "/usr/local/sbin/hermes-dashboard",
-      "git_blob_sha": "beb2894b93bafff19cf23b6a7be97fae256ed9a6"
+      "git_blob_sha": "e49e1500ea3095f3cf96c6302ed6a122d3392ef0"
     }
   ]
 }
