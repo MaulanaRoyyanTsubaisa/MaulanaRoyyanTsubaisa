@@ -1,4 +1,4 @@
-# Telegram Ops Control v1.0.1
+# Telegram Ops Control v1.1.0
 
 Use this skill only for the Telegram/server operation commands below.
 
@@ -47,3 +47,17 @@ Dashboard reference:
 - `/incidents` — incident monitor
 
 These dashboard commands are read-only.
+
+
+Bulk helpers:
+- `health all` -> run health checks for every registered app and return a compact summary.
+- `backup all` -> back up all registered apps sequentially and verify each backup.
+
+Logging safety:
+- `logs APP` must use only the safe helper.
+- The helper automatically redacts sensitive-looking values and truncates oversized output for Telegram.
+- Never bypass that redaction by reading raw container logs directly.
+
+Repo provisioning:
+- `deploynew REPO` remains guarded and requires explicit `/confirm`.
+- A repo without a valid `.home-server.json` must not be guessed into production.
