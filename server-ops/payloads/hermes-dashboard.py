@@ -60,9 +60,85 @@ def app_health(app):
     code = m.group(1) if m else ("200" if rc == 0 else "000")
     return rc == 0, code, out
 
+def registry_entry_for_app(app):
+    data = registry_data()
+    for key, value in data.get("apps", {}).items():
+        if isinstance(value, dict) and value.get("app") == app:
+            return str(key), value
+    return None, {}
+
+def repo_candidates(app):
+    key, entry = registry_entry_for_app(app)
+    out = []
+
+    # Explicit path-like fields from the registry, when present.
+    for k, v in entry.items():
+        if not isinstance(v, str):
+            continue
+        lk = str(k).lower()
+        if any(token in lk for token in ("path", "workdir", "repo_dir", "app_dir", "directory")):
+            if v.startswith("/"):
+                out.append(Path(v))
+
+    # Derive a checkout name from repository metadata.
+    for k in ("repo", "repository", "repository_full_name", "github_repo"):
+        v = entry.get(k)
+        if isinstance(v, str) and v.strip():
+            name = v.rstrip("/").split("/")[-1]
+            if name.endswith(".git"):
+                name = name[:-4]
+            if name:
+                out.append(Path("/srv/hermes-workspace/repos") / name)
+                out.append(Path("/srv/apps") / name)
+
+    # Common locations used by this server.
+    out.extend([
+        Path("/srv/hermes-workspace/repos") / app,
+        Path("/srv/apps") / app,
+    ])
+
+    # Original applications whose checkout folder differs from the app alias.
+    special = {
+        "portfolio": Path("/srv/apps/maulana-royyan-tsubaisa"),
+        "opspilot": Path("/srv/apps/opspilot-dashboard"),
+        "bantuai": Path("/srv/apps/bantuai-chatbot"),
+        "niagabot": Path("/srv/apps/niagabot"),
+    }
+    if app in special:
+        out.append(special[app])
+
+    # Preserve order while removing duplicates.
+    seen = set()
+    unique = []
+    for p in out:
+        s = str(p)
+        if s not in seen:
+            seen.add(s)
+            unique.append(p)
+    return unique
+
 def repo_ok(app):
+    # Prefer direct, read-only git inspection. This avoids treating an
+    # unsupported hermes-ops repo-status call as if the repository were broken.
+    for path in repo_candidates(app):
+        if not path.exists():
+            continue
+        rc, inside = run(["git", "-C", str(path), "rev-parse", "--is-inside-work-tree"], timeout=10)
+        if rc != 0 or inside.strip().lower() != "true":
+            continue
+
+        _, branch = run(["git", "-C", str(path), "branch", "--show-current"], timeout=10)
+        _, sha = run(["git", "-C", str(path), "rev-parse", "--short", "HEAD"], timeout=10)
+        detail = str(path)
+        if branch or sha:
+            detail += " | " + "@".join(x for x in (clean(branch, 30), clean(sha, 16)) if x)
+        return True, clean(detail, 100)
+
+    # Fallback to the safe gateway if the checkout lives somewhere unusual.
     rc, out = run(["/usr/local/sbin/hermes-ops", "repo-status", app], timeout=20)
-    return rc == 0, clean(out, 80)
+    if rc == 0:
+        return True, clean(out, 100)
+    return False, "local git checkout not detected"
 
 def service_status(name):
     rc, out = run(["systemctl", "is-active", name])
@@ -287,12 +363,12 @@ def cmd_apps():
         if rok:
             repo_count += 1
         h = "✅" if ok else "❌"
-        r = "repo✓" if rok else "repo?"
+        r = "repo✓" if rok else "repo—"
         print(f"{h} {app} — HTTP {code} | {r}")
 
     print()
     print(f"Health: {ok_count}/{len(aa)}")
-    print(f"Repo status readable: {repo_count}/{len(aa)}")
+    print(f"Local git repo detected: {repo_count}/{len(aa)}")
     print("Tip: /health all untuk detail health semua app.")
 
 def cmd_backups():
