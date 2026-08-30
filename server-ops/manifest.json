@@ -1,12 +1,12 @@
 {
-  "version": "1.5.0",
-  "note": "Public URL + SSL Watch: proactive Telegram alerts for public endpoint failures and TLS certificates nearing expiry",
+  "version": "1.6.0",
+  "note": "Dynamic Fleet Monitoring: new apps are monitored automatically at <app>.maulanaroyyantsubaisa.my.id, plus reboot detection and automatic cleanup of removed apps",
   "restart_gateway": false,
   "files": [
     {
       "source": "payloads/hermes-incident-monitor.py",
       "destination": "/usr/local/sbin/hermes-incident-monitor",
-      "git_blob_sha": "a20e653f9ec70dea1e7ca16567db246b83bd21a4"
+      "git_blob_sha": "03038397325772ee62f652e7f1b3456a21abc8b9"
     }
   ]
 }
