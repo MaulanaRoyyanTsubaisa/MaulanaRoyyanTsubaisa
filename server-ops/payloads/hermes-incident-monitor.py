@@ -34,6 +34,9 @@ PUBLIC_RETRIES = 3
 PUBLIC_RETRY_DELAY = 3
 SSL_ALERT_DAYS = 14
 SSL_RECOVER_DAYS = 21
+PUBLIC_SLOW_SECONDS = 3.0
+PUBLIC_SLOW_RECOVER_SECONDS = 2.0
+PUBLIC_SLOW_CONSECUTIVE = 2
 
 BASE_DOMAIN = "maulanaroyyantsubaisa.my.id"
 ROOT_DOMAIN_APP = "portfolio"
@@ -194,25 +197,40 @@ def backup_problem():
 def public_http(url):
     last_code = "000"
     last_detail = ""
+    last_latency = None
+
     for i in range(PUBLIC_RETRIES):
         rc, out = run([
             "curl", "-L", "--silent", "--show-error",
             "--output", "/dev/null",
-            "--write-out", "%{http_code}",
+            "--write-out", "%{http_code} %{time_total}",
             "--connect-timeout", "5",
             "--max-time", "12",
-            "--user-agent", "HermesHomeServerMonitor/1.5",
+            "--user-agent", "HermesHomeServerMonitor/1.7",
             url,
         ], timeout=20)
-        code = (out or "").strip()[-3:]
+
+        parts = (out or "").strip().split()
+        code = parts[-2] if len(parts) >= 2 else "000"
+        try:
+            latency = float(parts[-1]) if len(parts) >= 2 else None
+        except Exception:
+            latency = None
+
         if code.isdigit():
             last_code = code
+        if latency is not None:
+            last_latency = latency
         last_detail = out
+
         if rc == 0 and code.isdigit() and 200 <= int(code) < 400:
-            return True, code
+            return True, code, latency
+
         if i < PUBLIC_RETRIES - 1:
             time.sleep(PUBLIC_RETRY_DELAY)
-    return False, last_code if last_code != "000" else (last_detail[-120:] if last_detail else "unreachable")
+
+    detail = last_code if last_code != "000" else (last_detail[-120:] if last_detail else "unreachable")
+    return False, detail, last_latency
 
 def tls_days_remaining(url):
     try:
@@ -246,26 +264,52 @@ def check_public_fleet(state, apps, alert_lines, recover_lines):
         prev = public_state.get(app, {})
         was_active = bool(prev.get("active"))
 
-        http_ok, http_detail = public_http(url)
+        http_ok, http_detail, latency = public_http(url)
         tls_days = tls_days_remaining(url) if http_ok else None
 
         ssl_limit = SSL_RECOVER_DAYS if was_active else SSL_ALERT_DAYS
         ssl_problem = tls_days is not None and tls_days <= ssl_limit
         active = (not http_ok) or ssl_problem
 
+        prev_slow_active = bool(prev.get("slow_active"))
+        slow_count = int(prev.get("slow_count", 0) or 0)
+
+        if http_ok and latency is not None:
+            if latency >= PUBLIC_SLOW_SECONDS:
+                slow_count += 1
+            elif latency <= PUBLIC_SLOW_RECOVER_SECONDS:
+                slow_count = 0
+
+        slow_active = prev_slow_active
+        if not prev_slow_active and slow_count >= PUBLIC_SLOW_CONSECUTIVE:
+            slow_active = True
+            msg = f"🐢 Public endpoint slow: {app} — {latency:.2f}s"
+            alert_lines.append(msg)
+            add_history(state, "alert", msg)
+        elif prev_slow_active and http_ok and latency is not None and latency <= PUBLIC_SLOW_RECOVER_SECONDS:
+            slow_active = False
+            slow_count = 0
+            msg = f"✅ Public endpoint speed recovered: {app} — {latency:.2f}s"
+            recover_lines.append(msg)
+            add_history(state, "recovery", msg)
+
+        latency_text = f"{latency:.2f}s" if latency is not None else "?"
         if not http_ok:
             detail = f"HTTP {http_detail}"
         elif ssl_problem:
-            detail = f"SSL expires in {tls_days}d"
+            detail = f"HTTP {http_detail}; {latency_text}; SSL expires in {tls_days}d"
         elif tls_days is None:
-            detail = f"HTTP {http_detail}; TLS metadata unavailable"
+            detail = f"HTTP {http_detail}; {latency_text}; TLS metadata unavailable"
         else:
-            detail = f"HTTP {http_detail}; SSL {tls_days}d"
+            detail = f"HTTP {http_detail}; {latency_text}; SSL {tls_days}d"
 
         public_state[app] = {
             "active": active,
             "detail": detail,
             "url": url,
+            "latency_seconds": latency,
+            "slow_count": slow_count,
+            "slow_active": slow_active,
             "updated_at": now,
         }
 
